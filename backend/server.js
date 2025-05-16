@@ -12,8 +12,14 @@ connectDB();
 const app = express();
 app.use(express.json()); // Parse JSON data
 
+// Import routes
+const authRoutes = require("./routes/authRoutes");
 const studentRoutes = require("./routes/studentRoutes");
-app.use("/api/students", studentRoutes);
+
+// Mount routes
+app.use("/api/auth", authRoutes); // Authentication routes
+app.use("/api/students", studentRoutes); // Student management routes
+
 // Test endpoint
 app.get("/", (req, res) => {
   res.send("Hello from Student Task Tracker API!");

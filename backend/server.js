@@ -10,19 +10,21 @@ connectDB();
 
 // Initialize Express
 const app = express();
-app.use(express.json()); // Parse JSON data
+app.use(express.json());
 
 // Import routes
 const authRoutes = require("./routes/authRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 const studentRoutes = require("./routes/studentRoutes");
 
 // Mount routes
-app.use("/api/auth", authRoutes); // Authentication routes
-app.use("/api/students", studentRoutes); // Student management routes
+app.use("/api/auth", authRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/student", studentRoutes);
 
 // Test endpoint
 app.get("/", (req, res) => {
-  res.send("Hello from Student Task Tracker API!");
+  res.send("Student Task Tracker API is running!");
 });
 
 const PORT = process.env.PORT || 5000;

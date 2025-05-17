@@ -1,15 +1,16 @@
 const express = require("express");
 const router = express.Router();
-const { uploadStudents } = require("../controllers/studentController");
-const multer = require("multer");
-const upload = multer({ storage: multer.memoryStorage() });
+const { verifyToken } = require("../middleware/auth");
+const { studentCheck } = require("../middleware/roleCheck");
+const {
+  getStudentTasks,
+  markTaskCompleted
+} = require("../controllers/taskController");
 
-// POST /api/students/upload (Excel upload)
+// Protected student routes
+router.use(verifyToken, studentCheck);
 
+router.get("/tasks", getStudentTasks);
+router.patch("/tasks/:id/complete", markTaskCompleted);
 
 module.exports = router;
-
-const { adminCheck } = require("../middleware/roleCheck");
-
-router.post("/upload", adminCheck, upload.single("file"), uploadStudents);
-

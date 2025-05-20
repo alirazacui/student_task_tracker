@@ -5,10 +5,10 @@ class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  _SplashScreenState createState() => _SplashScreenState();
+  SplashScreenState createState() => SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
@@ -20,22 +20,25 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     )..repeat(reverse: true);
     
     Future.delayed(const Duration(seconds: 3), () {
-      Navigator.pushReplacementNamed(context, '/login');
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/login');
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme._background,
+      backgroundColor: AppTheme.background,
       body: Center(
         child: ScaleTransition(
           scale: Tween(begin: 0.5, end: 1.0).animate(_controller),
-          child: const Text("SOFTIA",
+          child: const Text(
+            "SOFTIA",
             style: TextStyle(
               fontSize: 40,
               fontWeight: FontWeight.bold,
-              color: AppTheme._primary,
+              color: AppTheme.primary,
               fontFamily: 'Poppins',
             ),
           ),

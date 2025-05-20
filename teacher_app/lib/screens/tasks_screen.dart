@@ -1,203 +1,416 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:intl/intl.dart';
 import '../services/api_service.dart';
-import '../utils/constants.dart';
-import '../utils/theme.dart';
-import '../models/user_model.dart';
-import '../models/task_model.dart';
+import '../models/task.dart';
+import '../models/student.dart';
 
 class TasksScreen extends StatefulWidget {
   const TasksScreen({super.key});
 
   @override
-  _TasksScreenState createState() => _TasksScreenState();
+  State<TasksScreen> createState() => _TasksScreenState();
 }
 
 class _TasksScreenState extends State<TasksScreen> {
-  final List<Task> _tasks = [];
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
-  DateTime? _selectedDueDate;
-  String? _selectedStudentId;
-  List<User> _students = [];
+  List<Task> _tasks = [];
+  List<Student> _students = [];
+  bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _fetchTasks();
-    _fetchStudents();
+    _loadData();
   }
 
-  Future<void> _fetchTasks() async {
+  Future<void> _loadData() async {
     try {
-      final data = await ApiService.callApi(endpoint: ApiEndpoints.fetchTasks);
       setState(() {
-        _tasks = (data as List).map((task) => Task.fromJson(task)).toList();
+        _isLoading = true;
+        _error = null;
+      });
+
+      final tasksData = await ApiService.getTasks();
+      final studentsData = await ApiService.getStudents();
+
+      setState(() {
+        _tasks = tasksData.map((json) => Task.fromJson(json)).toList();
+        _students = studentsData.map((json) => Student.fromJson(json)).toList();
+        _isLoading = false;
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load tasks: ${e.toString()}')),
-      );
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
     }
   }
 
-  Future<void> _fetchStudents() async {
-    try {
-      final data = await ApiService.callApi(endpoint: ApiEndpoints.fetchStudents);
-      setState(() {
-        _students = (data as List).map((student) => User.fromJson(student)).toList();
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load students: ${e.toString()}')),
-      );
-    }
-  }
+  Future<void> _showAddTaskDialog() async {
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+    DateTime? dueDate;
+    String? selectedStudentId;
 
-  Future<void> _assignTask() async {
-    showModalBottomSheet(
+    await showDialog(
       context: context,
-      isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          top: 20,
-          left: 20,
-          right: 20,
-        ),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Add New Task'),
+            content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Assign New Task',
-                style: TextStyle(
-                  fontSize: 20,
-                  color: AppTheme._primary,
-                  fontWeight: FontWeight.bold,
-                )),
-            TextFormField(
-              controller: _titleController,
-              decoration: const InputDecoration(labelText: 'Task Title'),
-            ),
-            TextFormField(
-              controller: _descriptionController,
-              decoration: const InputDecoration(labelText: 'Description'),
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(
+                      labelText: 'Title',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Description',
+                      border: OutlineInputBorder(),
+                    ),
               maxLines: 3,
             ),
+                  const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: _selectedStudentId,
-              decoration: const InputDecoration(labelText: 'Assign to Student'),
-              items: _students.map((User student) {
-                return DropdownMenuItem<String>(
+                    decoration: const InputDecoration(
+                      labelText: 'Assign To',
+                      border: OutlineInputBorder(),
+                    ),
+                    items:
+                        _students.map((student) {
+                          return DropdownMenuItem(
                   value: student.id,
                   child: Text(student.name),
                 );
               }).toList(),
-              onChanged: (value) => setState(() => _selectedStudentId = value),
+                    onChanged: (value) {
+                      selectedStudentId = value;
+                    },
             ),
+                  const SizedBox(height: 16),
             ListTile(
-              leading: const Icon(Icons.calendar_today, color: AppTheme._accent),
-              title: Text(_selectedDueDate == null
-                  ? 'Select Due Date'
-                  : DateFormat('MMM dd, yyyy').format(_selectedDueDate!)),
+                    title: const Text('Due Date'),
+                    subtitle: Text(
+                      dueDate?.toString().split(' ')[0] ?? 'Select a date',
+                    ),
+                    trailing: const Icon(Icons.calendar_today),
               onTap: () async {
                 final date = await showDatePicker(
                   context: context,
                   initialDate: DateTime.now(),
                   firstDate: DateTime.now(),
-                  lastDate: DateTime(2026),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
                 );
                 if (date != null) {
-                  setState(() => _selectedDueDate = date);
+                        dueDate = date;
                 }
               },
             ),
-            ElevatedButton.icon(
-              icon: const FaIcon(FontAwesomeIcons.paperPlane),
-              label: const Text('Assign Task'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme._primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 30),
+                ],
               ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
               onPressed: () async {
-                try {
-                  if (_selectedStudentId == null || _selectedDueDate == null) {
-                    throw Exception('Please select student and due date');
+                  if (titleController.text.isEmpty ||
+                      descriptionController.text.isEmpty ||
+                      selectedStudentId == null ||
+                      dueDate == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please fill all fields')),
+                    );
+                    return;
                   }
 
-                  await ApiService.callApi(
-                    endpoint: ApiEndpoints.assignTask,
-                    method: 'POST',
-                    body: {
-                      "title": _titleController.text,
-                      "description": _descriptionController.text,
-                      "assigned_to": _selectedStudentId,
-                      "due_date": _selectedDueDate!.toIso8601String(),
-                    },
-                  );
+                  try {
+                    await ApiService.createTask({
+                      'title': titleController.text,
+                      'description': descriptionController.text,
+                      'assigned_to': selectedStudentId,
+                      'due_date': dueDate!.toIso8601String(),
+                      'status': 'pending',
+                    });
 
-                  Navigator.pop(context);
-                  await _fetchTasks();
-                  _titleController.clear();
-                  _descriptionController.clear();
-                  setState(() {
-                    _selectedStudentId = null;
-                    _selectedDueDate = null;
-                  });
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Assignment failed: ${e.toString()}')),
-                  );
+                    if (mounted) {
+                      Navigator.pop(context);
+                      _loadData();
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(e.toString())));
+                    }
+                  }
+                },
+                child: const Text('Add Task'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Future<void> _showEditTaskDialog(Task task) async {
+    final titleController = TextEditingController(text: task.title);
+    final descriptionController = TextEditingController(text: task.description);
+    DateTime? dueDate = task.dueDate;
+    String? selectedStudentId = task.assignedTo;
+
+    await showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Edit Task'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(
+                      labelText: 'Title',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Description',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: selectedStudentId,
+                    decoration: const InputDecoration(
+                      labelText: 'Assign To',
+                      border: OutlineInputBorder(),
+                    ),
+                    items:
+                        _students.map((student) {
+                          return DropdownMenuItem(
+                            value: student.id,
+                            child: Text(student.name),
+                          );
+                        }).toList(),
+                    onChanged: (value) {
+                      selectedStudentId = value;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  ListTile(
+                    title: const Text('Due Date'),
+                    subtitle: Text(
+                      dueDate?.toString().split(' ')[0] ?? 'Select a date',
+                    ),
+                    trailing: const Icon(Icons.calendar_today),
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: dueDate ?? DateTime.now(),
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (date != null) {
+                        dueDate = date;
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: task.status,
+                    decoration: const InputDecoration(
+                      labelText: 'Status',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'pending',
+                        child: Text('Pending'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'completed',
+                        child: Text('Completed'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        task.status = value;
                 }
               },
             ),
-            const SizedBox(height: 20),
-          ],
-        ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (titleController.text.isEmpty ||
+                      descriptionController.text.isEmpty ||
+                      selectedStudentId == null ||
+                      dueDate == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please fill all fields')),
+                    );
+                    return;
+                  }
+
+                  try {
+                    await ApiService.updateTask(task.id, {
+                      'title': titleController.text,
+                      'description': descriptionController.text,
+                      'assigned_to': selectedStudentId,
+                      'due_date': dueDate!.toIso8601String(),
+                      'status': task.status,
+                    });
+
+                    if (mounted) {
+                      Navigator.pop(context);
+                      _loadData();
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(e.toString())));
+                    }
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
       ),
     );
+  }
+
+  Future<void> _deleteTask(Task task) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Delete Task'),
+            content: Text('Are you sure you want to delete "${task.title}"?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ApiService.deleteTask(task.id);
+        if (mounted) {
+          _loadData();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(e.toString())));
+        }
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppTheme._accent,
-        child: const Icon(Icons.add, size: 30),
-        onPressed: _assignTask,
-      ),
-      body: ListView.builder(
-        itemCount: _tasks.length,
-        itemBuilder: (ctx, index) => Card(
-          elevation: 3,
-          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      appBar: AppBar(title: const Text('Tasks')),
+      body:
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
+              ? Center(child: Text(_error!))
+              : RefreshIndicator(
+                onRefresh: _loadData,
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16.0),
+                  itemCount: _tasks.length,
+                  itemBuilder: (context, index) {
+                    final task = _tasks[index];
+                    final student = _students.firstWhere(
+                      (s) => s.id == task.assignedTo,
+                      orElse:
+                          () => Student(
+                            id: '',
+                            name: 'Unknown',
+                            email: '',
+                            createdAt: DateTime.now(),
+                          ),
+                    );
+
+                    return Card(
           child: ListTile(
-            leading: const FaIcon(FontAwesomeIcons.task, color: AppTheme._primary),
-            title: Text(_tasks[index].title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme._primary,
-                )),
+                        leading: Icon(
+                          task.status == 'completed'
+                              ? Icons.check_circle
+                              : Icons.pending,
+                          color:
+                              task.status == 'completed'
+                                  ? Colors.green
+                                  : Colors.orange,
+                        ),
+                        title: Text(task.title),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_tasks[index].description),
-                Text('Due: ${DateFormat('MMM dd').format(_tasks[index].dueDate)}',
-                    style: TextStyle(color: Colors.grey[600])),
-              ],
-            ),
-            trailing: Chip(
-              backgroundColor: _tasks[index].status == 'completed'
-                  ? Colors.green[100]
-                  : Colors.orange[100],
-              label: Text(_tasks[index].status),
-            ),
-          ),
-        ),
+                            Text(task.description),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Assigned to: ${student.name}',
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                            Text(
+                              'Due: ${task.dueDate.toString().split(' ')[0]}',
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit),
+                              onPressed: () => _showEditTaskDialog(task),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete),
+                              onPressed: () => _deleteTask(task),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddTaskDialog,
+        child: const Icon(Icons.add),
       ),
     );
   }

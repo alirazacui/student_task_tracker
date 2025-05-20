@@ -1,188 +1,307 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../services/api_service.dart';
-import '../utils/theme.dart';
-import '../widgets/softia_logo.dart';
+import '../models/student.dart';
 
 class StudentsScreen extends StatefulWidget {
   const StudentsScreen({super.key});
 
   @override
-  _StudentsScreenState createState() => _StudentsScreenState();
+  State<StudentsScreen> createState() => _StudentsScreenState();
 }
 
 class _StudentsScreenState extends State<StudentsScreen> {
-  List<dynamic> _students = [];
+  List<Student> _students = [];
   bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _fetchStudents();
+    _loadStudents();
   }
 
-  Future<void> _fetchStudents() async {
+  Future<void> _loadStudents() async {
     try {
-      final data = await ApiService.callApi(endpoint: 'students');
       setState(() {
-        _students = data;
+        _isLoading = true;
+        _error = null;
+      });
+
+      final studentsData = await ApiService.getStudents();
+      setState(() {
+        _students = studentsData.map((json) => Student.fromJson(json)).toList();
         _isLoading = false;
       });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error fetching students: $e')),
-        );
-      }
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
     }
   }
 
-  Future<void> _uploadExcel() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['xlsx'],
-    );
+  Future<void> _uploadStudents() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xlsx', 'xls'],
+      );
 
-    if (result != null) {
-      try {
+      if (result != null) {
         final response = await ApiService.uploadFile(
           endpoint: 'admin/students/upload',
           filePath: result.files.single.name,
           fileBytes: result.files.single.bytes!,
         );
 
-        if (response['success'] == true) {
-          await _fetchStudents();
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Added ${response['added']} students')),
-            );
-          }
-        }
-      } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Upload failed: ${e.toString()}')),
+            SnackBar(
+              content: Text('Successfully added ${response['count']} students'),
+            ),
           );
+          _loadStudents();
         }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
       }
     }
   }
 
-  void _showAddStudentDialog() {
-    showDialog(
+  Future<void> _showAddStudentDialog() async {
+    final nameController = TextEditingController();
+    final emailController = TextEditingController();
+
+    await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text(
-          'Add New Student',
-          style: TextStyle(color: AppTheme.primary),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              decoration: const InputDecoration(labelText: 'Name'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Add New Student'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: emailController,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+              ],
             ),
-            TextFormField(
-              decoration: const InputDecoration(labelText: 'Email'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (nameController.text.isEmpty ||
+                      emailController.text.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please fill all fields')),
+                    );
+                    return;
+                  }
+
+                  try {
+                    await ApiService.addStudent({
+                      'name': nameController.text,
+                      'email': emailController.text,
+                    });
+
+                    if (mounted) {
+                      Navigator.pop(context);
+                      _loadStudents();
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(e.toString())));
+                    }
+                  }
+                },
+                child: const Text('Add'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.accent,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () async {
-              // Implement add student API call here if needed
-              Navigator.pop(ctx);
-              await _fetchStudents();
-            },
-            child: const Text('Add Student'),
-          ),
-        ],
-      ),
     );
+  }
+
+  Future<void> _showEditStudentDialog(Student student) async {
+    final nameController = TextEditingController(text: student.name);
+    final emailController = TextEditingController(text: student.email);
+
+    await showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Edit Student'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: emailController,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (nameController.text.isEmpty ||
+                      emailController.text.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please fill all fields')),
+                    );
+                    return;
+                  }
+
+                  try {
+                    await ApiService.updateStudent(student.id, {
+                      'name': nameController.text,
+                      'email': emailController.text,
+                    });
+
+                    if (mounted) {
+                      Navigator.pop(context);
+                      _loadStudents();
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(e.toString())));
+                    }
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Future<void> _deleteStudent(Student student) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Delete Student'),
+            content: Text('Are you sure you want to delete ${student.name}?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ApiService.deleteStudent(student.id);
+        if (mounted) {
+          _loadStudents();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(e.toString())));
+        }
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const SoftiaLogo(),
+        title: const Text('Students'),
         actions: [
           IconButton(
-            icon: const FaIcon(
-              FontAwesomeIcons.fileExcel,
-              color: AppTheme.accent,
-            ),
-            onPressed: _uploadExcel,
-          ),
-          IconButton(
-            icon: const Icon(Icons.add, color: AppTheme.primary),
-            onPressed: _showAddStudentDialog,
+            icon: const Icon(Icons.upload_file),
+            onPressed: _uploadStudents,
+            tooltip: 'Upload Students',
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              child: DataTable(
-                columns: const [
-                  DataColumn(
-                    label: Text(
-                      'Name',
-                      style: TextStyle(color: AppTheme.primary),
-                    ),
-                  ),
-                  DataColumn(label: Text('Email')),
-                  DataColumn(label: Text('Actions')),
-                ],
-                rows: _students.map((student) {
-                  return DataRow(
-                    cells: [
-                      DataCell(Text(student['name'])),
-                      DataCell(Text(student['email'])),
-                      DataCell(
-                        Row(
+      body:
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
+              ? Center(child: Text(_error!))
+              : RefreshIndicator(
+                onRefresh: _loadStudents,
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16.0),
+                  itemCount: _students.length,
+                  itemBuilder: (context, index) {
+                    final student = _students[index];
+                    return Card(
+                      child: ListTile(
+                        leading: CircleAvatar(child: Text(student.name[0])),
+                        title: Text(student.name),
+                        subtitle: Text(student.email),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              icon: const Icon(
-                                Icons.delete,
-                                color: Colors.red,
-                              ),
-                              onPressed: () => _deleteStudent(student['_id']),
+                              icon: const Icon(Icons.edit),
+                              onPressed: () => _showEditStudentDialog(student),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete),
+                              onPressed: () => _deleteStudent(student),
                             ),
                           ],
                         ),
                       ),
-                    ],
-                  );
-                }).toList(),
+                    );
+                  },
+                ),
               ),
-            ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddStudentDialog,
+        child: const Icon(Icons.add),
+      ),
     );
-  }
-
-  Future<void> _deleteStudent(String id) async {
-    try {
-      await ApiService.callApi(
-        endpoint: 'admin/students/$id',
-        method: 'DELETE',
-      );
-      await _fetchStudents();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Delete failed: ${e.toString()}')),
-        );
-      }
-    }
   }
 }

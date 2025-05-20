@@ -12,7 +12,6 @@ class AppTheme {
       secondary: accent,
       background: background,
     ),
-    fontFamily: 'Poppins',
     appBarTheme: const AppBarTheme(
       backgroundColor: primary,
       iconTheme: IconThemeData(color: Colors.white),

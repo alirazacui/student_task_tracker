@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../theme/app_colors.dart';
 
 class TaskTile extends StatelessWidget {
   final String title;
@@ -26,7 +27,8 @@ class TaskTile extends StatelessWidget {
         ),
         child: Icon(Icons.task, color: AppColors.accent),
       ),
-      title: Text(title,
+      title: Text(
+        title,
         style: const TextStyle(
           fontWeight: FontWeight.bold,
           color: AppColors.primary,
@@ -35,20 +37,20 @@ class TaskTile extends StatelessWidget {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(description,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
+          Text(description, maxLines: 2, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 4),
-          Text("Due: ${DateFormat('MMM dd, yyyy').format(dueDate)}",
+          Text(
+            "Due: ${DateFormat('MMM dd, yyyy').format(dueDate)}",
             style: TextStyle(color: Colors.grey[600]),
+          ),
         ],
       ),
       trailing: Chip(
         label: Text(status.toUpperCase()),
-        backgroundColor: status == "completed" 
-            ? Colors.green.withOpacity(0.2)
-            : Colors.orange.withOpacity(0.2),
+        backgroundColor:
+            status == "completed"
+                ? Colors.green.withOpacity(0.2)
+                : Colors.orange.withOpacity(0.2),
       ),
     );
   }

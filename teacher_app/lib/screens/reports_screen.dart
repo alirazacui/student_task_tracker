@@ -3,36 +3,64 @@ import 'package:fl_chart/fl_chart.dart';
 import '../services/api_service.dart';
 import '../utils/constants.dart';
 import '../utils/theme.dart';
-
+import '../models/student.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
 
   @override
-  _ReportsScreenState createState() => _ReportsScreenState();
+  ReportsScreenState createState() => ReportsScreenState();
 }
 
-class _ReportsScreenState extends State<ReportsScreen> {
+class ReportsScreenState extends State<ReportsScreen> {
   Map<String, dynamic> _reportData = {};
+  List<Student> _students = [];
+  String? _selectedStudentId;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchReportData();
+    _loadStudents();
+  }
+
+  Future<void> _loadStudents() async {
+    try {
+      final studentsData = await ApiService.getStudents();
+      setState(() {
+        _students = studentsData.map((json) => Student.fromJson(json)).toList();
+        if (_students.isNotEmpty) {
+          _selectedStudentId = _students.first.id;
+          _fetchReportData();
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load students: ${e.toString()}')),
+        );
+      }
+    }
   }
 
   Future<void> _fetchReportData() async {
+    if (_selectedStudentId == null) return;
+
     try {
-      final data = await ApiService.callApi(endpoint: ApiEndpoints.getReport);
+      setState(() => _isLoading = true);
+      final data = await ApiService.callApi(
+        endpoint: '${ApiEndpoints.getReport}/${_selectedStudentId}',
+      );
       setState(() {
         _reportData = data;
         _isLoading = false;
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load report: ${e.toString()}')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load report: ${e.toString()}')),
+        );
+      }
     }
   }
 
@@ -41,20 +69,53 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Analytics Reports'),
-        backgroundColor: AppTheme._primary,
+        backgroundColor: AppTheme.primary,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
+      body:
+          _students.isEmpty
+              ? const Center(child: Text('No students available'))
+              : Column(
                 children: [
-                  _buildSummaryCards(),
-                  const SizedBox(height: 20),
-                  Expanded(child: _buildPerformanceChart()),
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedStudentId,
+                      decoration: const InputDecoration(
+                        labelText: 'Select Student',
+                        border: OutlineInputBorder(),
+                      ),
+                      items:
+                          _students.map((student) {
+                            return DropdownMenuItem(
+                              value: student.id,
+                              child: Text(student.name),
+                            );
+                          }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _selectedStudentId = value);
+                          _fetchReportData();
+                        }
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child:
+                        _isLoading
+                            ? const Center(child: CircularProgressIndicator())
+                            : Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                children: [
+                                  _buildSummaryCards(),
+                                  const SizedBox(height: 20),
+                                  Expanded(child: _buildPerformanceChart()),
+                                ],
+                              ),
+                            ),
+                  ),
                 ],
               ),
-            ),
     );
   }
 
@@ -92,18 +153,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
             barRods: [
               BarChartRodData(
                 toY: _reportData['performance_score'].toDouble(),
-                color: AppTheme._accent,
+                color: AppTheme.accent, // Fixed from _accent
                 width: 20,
-              )
+              ),
             ],
           ),
         ],
         titlesData: FlTitlesData(
           leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 40,
-            ),
+            sideTitles: SideTitles(showTitles: true, reservedSize: 40),
           ),
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
@@ -147,16 +205,17 @@ class _SummaryCard extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    )),
-                Text(title,
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 14,
-                    )),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  title,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                ),
               ],
             ),
           ],

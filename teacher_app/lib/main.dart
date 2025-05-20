@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/register_screen.dart';
 import 'screens/admin_dashboard.dart';
 import 'screens/students_screen.dart';
 import 'screens/tasks_screen.dart';
@@ -32,6 +33,7 @@ class SoftiaAdminApp extends StatelessWidget {
       routes: {
         '/splash': (context) => const SplashScreen(),
         '/login': (context) => const LoginScreen(),
+        '/register': (context) => const RegisterScreen(),
         '/dashboard': (context) => const AdminDashboard(),
         '/students': (context) => const StudentsScreen(),
         '/tasks': (context) => const TasksScreen(),
